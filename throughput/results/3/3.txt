@@ -1,0 +1,67 @@
+BEGIN;
+BEGIN
+EXPLAIN (ANALYZE, BUFFERS)
+select
+	l_orderkey,
+	sum(l_extendedprice * (1 - l_discount)) as revenue,
+	o_orderdate,
+	o_shippriority
+from
+	customer,
+	orders,
+	lineitem
+where
+	c_mktsegment = 'MACHINERY'
+	and c_custkey = o_custkey
+	and l_orderkey = o_orderkey
+	and o_orderdate < date '1995-03-12'
+	and l_shipdate > date '1995-03-12'
+group by
+	l_orderkey,
+	o_orderdate,
+	o_shippriority
+order by
+	revenue desc,
+	o_orderdate
+LIMIT 10;
+                                                                                              QUERY PLAN                                                                                               
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=2774144.19..2774144.22 rows=10 width=20) (actual time=67970.581..67970.585 rows=10 loops=1)
+   Buffers: shared hit=742205 read=630054
+   ->  Sort  (cost=2774144.19..2782136.07 rows=3196751 width=20) (actual time=67970.577..67970.579 rows=10 loops=1)
+         Sort Key: (sum((lineitem.l_extendedprice * (1::double precision - lineitem.l_discount)))), orders.o_orderdate
+         Sort Method: top-N heapsort  Memory: 25kB
+         Buffers: shared hit=742205 read=630054
+         ->  HashAggregate  (cost=2673096.04..2705063.55 rows=3196751 width=20) (actual time=67876.836..67949.691 rows=113262 loops=1)
+               Buffers: shared hit=742199 read=630054
+               ->  Hash Join  (cost=631086.85..2625144.78 rows=3196751 width=20) (actual time=25055.229..67511.716 rows=299370 loops=1)
+                     Hash Cond: (lineitem.l_orderkey = orders.o_orderkey)
+                     Buffers: shared hit=742199 read=630054
+                     ->  Seq Scan on lineitem  (cost=0.00..1838826.05 rows=32870498 width=12) (actual time=0.050..22061.813 rows=32407210 loops=1)
+                           Filter: (l_shipdate > '1995-03-12'::date)
+                           Rows Removed by Filter: 27578328
+                           Buffers: shared hit=450901 read=628361
+                     ->  Hash  (cost=612614.99..612614.99 rows=1477749 width=12) (actual time=25052.608..25052.608 rows=1453855 loops=1)
+                           Buckets: 262144  Batches: 1  Memory Usage: 62471kB
+                           Buffers: shared hit=291298 read=1693
+                           ->  Hash Join  (cost=49725.52..612614.99 rows=1477749 width=12) (actual time=729.098..23494.390 rows=1453855 loops=1)
+                                 Hash Cond: (orders.o_custkey = customer.c_custkey)
+                                 Buffers: shared hit=291298 read=1693
+                                 ->  Seq Scan on orders  (cost=0.00..446496.39 rows=7390225 width=16) (actual time=0.029..5831.543 rows=7271135 loops=1)
+                                       Filter: (o_orderdate < '1995-03-12'::date)
+                                       Rows Removed by Filter: 7728865
+                                       Buffers: shared hit=256022 read=538
+                                 ->  Hash  (cost=45976.27..45976.27 rows=299940 width=4) (actual time=728.800..728.800 rows=300441 loops=1)
+                                       Buckets: 32768  Batches: 1  Memory Usage: 10563kB
+                                       Buffers: shared hit=35276 read=1155
+                                       ->  Bitmap Heap Scan on customer  (cost=6949.02..45976.27 rows=299940 width=4) (actual time=116.626..583.172 rows=300441 loops=1)
+                                             Recheck Cond: (c_mktsegment = 'MACHINERY'::bpchar)
+                                             Buffers: shared hit=35276 read=1155
+                                             ->  Bitmap Index Scan on customer_c_mktsegment_c_custkey_idx  (cost=0.00..6874.03 rows=299940 width=0) (actual time=104.079..104.079 rows=300441 loops=1)
+                                                   Index Cond: (c_mktsegment = 'MACHINERY'::bpchar)
+                                                   Buffers: shared read=1155
+ Total runtime: 68010.717 ms
+(35 rows)
+
+COMMIT;
+COMMIT

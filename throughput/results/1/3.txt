@@ -1,0 +1,67 @@
+BEGIN;
+BEGIN
+EXPLAIN (ANALYZE, BUFFERS)
+select
+	l_orderkey,
+	sum(l_extendedprice * (1 - l_discount)) as revenue,
+	o_orderdate,
+	o_shippriority
+from
+	customer,
+	orders,
+	lineitem
+where
+	c_mktsegment = 'AUTOMOBILE'
+	and c_custkey = o_custkey
+	and l_orderkey = o_orderkey
+	and o_orderdate < date '1995-03-10'
+	and l_shipdate > date '1995-03-10'
+group by
+	l_orderkey,
+	o_orderdate,
+	o_shippriority
+order by
+	revenue desc,
+	o_orderdate
+LIMIT 10;
+                                                                                             QUERY PLAN                                                                                              
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=2748377.99..2748378.01 rows=10 width=20) (actual time=74736.536..74736.540 rows=10 loops=1)
+   Buffers: shared hit=882357 read=476713 dirtied=22 written=23
+   ->  Sort  (cost=2748377.99..2756331.80 rows=3181525 width=20) (actual time=74736.530..74736.533 rows=10 loops=1)
+         Sort Key: (sum((lineitem.l_extendedprice * (1::double precision - lineitem.l_discount)))), orders.o_orderdate
+         Sort Method: top-N heapsort  Memory: 25kB
+         Buffers: shared hit=882357 read=476713 dirtied=22 written=23
+         ->  HashAggregate  (cost=2647811.12..2679626.37 rows=3181525 width=20) (actual time=74632.191..74715.823 rows=113855 loops=1)
+               Buffers: shared hit=882351 read=476713 dirtied=22 written=23
+               ->  Hash Join  (cost=625330.63..2600088.25 rows=3181525 width=20) (actual time=28851.912..74239.926 rows=300709 loops=1)
+                     Hash Cond: (lineitem.l_orderkey = orders.o_orderkey)
+                     Buffers: shared hit=882351 read=476713 dirtied=22 written=23
+                     ->  Seq Scan on lineitem  (cost=0.00..1820673.96 rows=32604907 width=12) (actual time=0.057..23325.163 rows=32490801 loops=1)
+                           Filter: (l_shipdate > '1995-03-10'::date)
+                           Rows Removed by Filter: 27554578
+                           Buffers: shared hit=688075 read=380533 dirtied=22 written=22
+                     ->  Hash  (cost=606979.91..606979.91 rows=1468058 width=12) (actual time=28849.008..28849.008 rows=1452907 loops=1)
+                           Buckets: 262144  Batches: 1  Memory Usage: 62430kB
+                           Buffers: shared hit=194276 read=96180 written=1
+                           ->  Hash Join  (cost=49802.57..606979.91 rows=1468058 width=12) (actual time=1000.490..25212.398 rows=1452907 loops=1)
+                                 Hash Cond: (orders.o_custkey = customer.c_custkey)
+                                 Buffers: shared hit=194276 read=96180 written=1
+                                 ->  Seq Scan on orders  (cost=0.00..442089.90 rows=7302317 width=16) (actual time=0.024..6428.504 rows=7265607 loops=1)
+                                       Filter: (o_orderdate < '1995-03-10'::date)
+                                       Rows Removed by Filter: 7749393
+                                       Buffers: shared hit=190932 read=63096 written=1
+                                 ->  Hash  (cost=46033.07..46033.07 rows=301560 width=4) (actual time=1000.177..1000.177 rows=300036 loops=1)
+                                       Buckets: 32768  Batches: 1  Memory Usage: 10549kB
+                                       Buffers: shared hit=3344 read=33084
+                                       ->  Bitmap Heap Scan on customer  (cost=6985.57..46033.07 rows=301560 width=4) (actual time=116.549..852.149 rows=300036 loops=1)
+                                             Recheck Cond: (c_mktsegment = 'AUTOMOBILE'::bpchar)
+                                             Buffers: shared hit=3344 read=33084
+                                             ->  Bitmap Index Scan on customer_c_mktsegment_c_custkey_idx  (cost=0.00..6910.18 rows=301560 width=0) (actual time=99.423..99.423 rows=300036 loops=1)
+                                                   Index Cond: (c_mktsegment = 'AUTOMOBILE'::bpchar)
+                                                   Buffers: shared read=1153
+ Total runtime: 74782.613 ms
+(35 rows)
+
+COMMIT;
+COMMIT
